@@ -1,0 +1,17 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Create a IAM user with a policy
+Resources:
+  AdeshUser:
+    Type: 'AWS::IAM::User'
+    Properties:
+      UserName: Adesh
+      Policies:
+        - PolicyName: AdeshPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - '*'
+                Resource: "*"
+

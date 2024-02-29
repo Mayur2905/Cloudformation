@@ -1,0 +1,17 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Create a SNS Topic.
+Resources:
+  MySNSTopic:
+    Type: 'AWS::SNS::Topic'
+    Properties:
+      DisplayName: MySNSTopic
+      TopicName: my-sns-topic
+  MySNSSubscription:
+    Type: 'AWS::SNS::Subscription'
+    Properties:
+      Protocol: email
+      TopicArn: !Ref MySNSTopic
+      Endpoint: 'mayurgaikwad0101@gmail.com'
+      Region: 'us-east-1'
+      RawMessageDelivery: 'true'
+

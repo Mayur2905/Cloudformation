@@ -1,0 +1,177 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Creates a VPC with public and private subnets and EC2 instances.
+Resources:
+# Creating A VPC 
+  MyVPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: MyVPC
+# Creating Public and Private Subnets
+  PublicSubnet:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: PublicSubnet
+  PrivateSubnet:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      VpcId: !Ref MyVPC
+      CidrBlock: 10.0.2.0/24
+      Tags:
+        - Key: Name
+          Value: PrivateSubnet
+# Creating an Internet Gateway
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    Properties:
+      Tags:
+        - Key: Name
+          Value: InternetGateway
+# Creating an Attach Gateway
+  AttachGateway:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !Ref MyVPC
+      InternetGatewayId: !Ref InternetGateway
+# Creating Route Table
+  PublicRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+        - Key: Name
+          Value: PublicRouteTable
+# Creating Route for public subnets
+  PublicRoute:
+    Type: 'AWS::EC2::Route'
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+# Creating Subnet Route Table Association
+  AssociatePublicSubnetRouteTable:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+# Creating a NAT Gateway
+  NATGateway:
+    Type: 'AWS::EC2::NatGateway'
+    DependsOn: AttachGateway
+    Properties:
+      AllocationId: !GetAtt ElasticIP.AllocationId
+      SubnetId: !Ref PublicSubnet   # attaching NAT Gateway to public subnet
+      Tags:
+        - Key: Name
+          Value: NATGatewayForPrivateSubnet
+  ElasticIP:
+    Type: 'AWS::EC2::EIP'
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: ElasticIPFORNATGateway
+# Creating a Route Table for private subnets
+  PrivateRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref MyVPC
+      Tags:
+        - Key: Name
+          Value: PrivateRouteTable
+# Creating a Route for private subnets
+  PrivateRoute:
+    Type: 'AWS::EC2::Route'
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway  # Use NatGatewayId for private route
+
+# Associating private subnet with route table
+  AssociatePrivateSubnetRouteTable:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PrivateSubnet
+      RouteTableId: !Ref PrivateRouteTable
+# creating a Security Group in VPC
+  MySecurity:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: 'Allow SSH and HTTP traffic'
+      VpcId: !Ref MyVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: '8080'
+          ToPort: '8080'
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: '3306'
+          ToPort: '3306'
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: MySecurityGroup
+  # Creating a Public Instance Name NginxInstance
+  PublicInstance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      InstanceType: t2.micro
+      ImageId: 'ami-0762cf9da6ee99049'
+      SubnetId: !Ref PublicSubnet
+      KeyName : 'Ohio'
+      SecurityGroupIds:
+        - !Ref MySecurity
+      Tags:
+        - Key: Name
+          Value: NginxInstance
+  # Creating a Private Instance Name ApacheInstance
+  PrivateInstance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      InstanceType: t2.micro
+      ImageId: 'ami-03da541f7751c76b8'
+      SubnetId: !Ref PrivateSubnet
+      SecurityGroupIds:
+        - !Ref MySecurity
+      KeyName : 'Ohio'
+      UserData:
+        Fn::Base64:  |
+          #!/bin/bash -xe
+          sudo -i
+          cd apache-tomcat-8.5.97/bin/
+          ./catlina.sh start
+      Tags:
+        - Key: Name
+          Value: ApacheInstance
+
+
+Outputs:
+  VPCId:
+    Value: !Ref MyVPC
+  PublicSubnetId:
+    Value: !Ref PublicSubnet
+  PrivateSubnetId:
+    Value: !Ref PrivateSubnet
+  PublicInstanceId:
+    Value: !Ref PublicInstance
+  PrivateInstanceId:
+    Value: !Ref PrivateInstance
